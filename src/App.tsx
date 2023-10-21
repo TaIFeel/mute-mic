@@ -1,30 +1,102 @@
-import { useLayoutEffect, useState } from 'react'
-import './App.css'
+import { useEffect, useLayoutEffect, useState } from 'react'
 import { ipcRenderer } from 'electron'
 import Icon from '@mdi/react';
-import { mdiMicrophone, mdiMicrophoneOff } from '@mdi/js';
+import {getAllAvailableMicrophone, ImicrophoneInfo} from './utils'
+import { mdiMicrophone, mdiMicrophoneOff, mdiMicrophoneSettings } from '@mdi/js';
 
-console.log('[App.tsx]', `Hello world from Electron ${process.versions.electron}!`)
+const Store = require('electron-store');
+const store = new Store();
 
+let regedit = require('regedit')
+// https://github.com/ironSource/node-regedit/issues/60
+regedit.setExternalVBSLocation('resources/regedit/vbs');
+regedit = regedit.promisified
 
+type ILoaded = "Loading" | "Error" | "Succefull"
+ 
 function App() {
 
-  const [micStatus, setMicStatus] = useState(false)
+  const [micEnabled, setMicEnabled] = useState<boolean>(false)
+  const [loaded, setLoaded] = useState <ILoaded>("Loading")
+  const [micRegeditLocation, setMicRegeditLocation] = useState<string>('')
+  const [ allMicrophones, setAllMicrophones] = useState<ImicrophoneInfo[]>([])
 
-
-  ipcRenderer.on('muteStatus', (event, status) => {
-    setMicStatus(status)
+  ipcRenderer.on('changeMicrophone', (event, microphoneName:string) => {
+    let microphoneInfo = allMicrophones.find(el => el.name = microphoneName)
+    if(!microphoneInfo) return
+    setMicEnabled(microphoneInfo.deviceState)
+    setMicRegeditLocation(microphoneInfo.location)
   })
 
-  useLayoutEffect(() => {
-    ipcRenderer.send('pageLoaded')
+
+  ipcRenderer.on('changeMuteStatus', async () => {
+
+    let DeviceState = 0
+
+    if(micEnabled){
+      DeviceState = 268435457
+      setMicEnabled(false)
+    }
+    else{
+      DeviceState = 1
+      setMicEnabled(true)
+    }
+
+    await regedit.putValue({
+      [micRegeditLocation]: {
+          DeviceState: {
+              value: DeviceState,
+              type: 'REG_DWORD'
+          }
+      }
+    })
+  })
+
+  let loadedColor = () => {
+    switch(loaded){
+      case "Loading":
+        return 'yellow'
+
+      case "Error":
+        return "red"
+    }
+  }
+
+  useEffect(() => {
+      getAllAvailableMicrophone().then((value)=>{
+        if(value.length){
+          let selectMicrophone:ImicrophoneInfo
+          let lastMicrophone = store.get('lastMicrophone')
+
+          if(!lastMicrophone) {
+            store.set('lastMicrophone', value[0].name)
+            selectMicrophone = value[0]
+          }
+          else {
+            let microphoneFinded = value.find(e => e.name === lastMicrophone)!
+            selectMicrophone = microphoneFinded
+          }
+
+          setAllMicrophones(value)
+          setMicEnabled(selectMicrophone.deviceState)
+          setMicRegeditLocation(selectMicrophone.location)
+
+          ipcRenderer.send('pageLoaded', value)
+        }
+        if(!value.length) return setLoaded('Error')
+        setLoaded("Succefull")
+      })
   },[])
 
 
   return (
     <div className='App'>
       <div className='indicator-microphone'>
-        <Icon path={micStatus? mdiMicrophoneOff :mdiMicrophone} size={1.5}  color={micStatus? 'red' : 'green'}/>
+        {loaded === "Loading" || loaded === "Error"?
+        <Icon path={mdiMicrophoneSettings} size={1.5} color={loadedColor()}/>
+        :
+        <Icon path={micEnabled? mdiMicrophone :mdiMicrophoneOff} size={1.5} color={micEnabled? 'green' : 'red'}/>
+        }
       </div>
     </div>
   )

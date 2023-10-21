@@ -1,8 +1,8 @@
-import { app, BrowserWindow, shell, ipcMain, globalShortcut } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, globalShortcut, Tray, Menu, MenuItem } from 'electron'
 import { release } from 'node:os'
 import { join } from 'node:path'
-const audio = require('win-audio').mic;
-
+const Store = require('electron-store');
+const store = new Store();
 
 process.env.DIST_ELECTRON = join(__dirname, '../')
 process.env.DIST = join(process.env.DIST_ELECTRON, '../dist')
@@ -34,8 +34,10 @@ async function createWindow() {
   win = new BrowserWindow({
     title: 'Mute Mic',
     autoHideMenuBar: true,
-    width: 80,
-    height: 80,
+    width: 81,
+    height: 81,
+    minHeight:80,
+    minWidth:80,
     icon: join(process.env.VITE_PUBLIC, 'favicon.ico'),
     transparent: true,
     frame: false,
@@ -47,6 +49,8 @@ async function createWindow() {
 
   win.setAlwaysOnTop(true, 'normal')
 
+  // https://github.com/electron/electron/issues/2170
+ 
 
   if (url) { // electron-vite-vue#298
     win.loadURL(url)
@@ -55,10 +59,6 @@ async function createWindow() {
     win.loadFile(indexHtml)
   }
 
-  // Test actively push message to the Electron-Renderer
-  win.webContents.on('did-finish-load', () => {
-    win?.webContents.send('main-process-message', new Date().toLocaleString())
-  })
 
   // Make all links open with the browser, not with the application
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -71,9 +71,13 @@ async function createWindow() {
 
 app.whenReady().then(() => {
   createWindow()
+
   globalShortcut.unregisterAll()
+  globalShortcut.register('F5', () => {
+    win?.webContents.reloadIgnoringCache()
+  })
   globalShortcut.register('Control+F12', () => {
-    audio.toggle()
+    win?.webContents.send('changeMuteStatus')
   })
   globalShortcut.register('Control+A+Z', () => {
     win?.close()
@@ -102,16 +106,35 @@ app.on('activate', () => {
   }
 })
 
-const sendNewStatus = (muteStatus:boolean, ot:string) => {
-  win?.webContents.send('muteStatus', muteStatus)
-}
+ipcMain.on('pageLoaded', (event, value) => {
 
-audio.polling(50)
+  let contextMenuElements:IMenuItem[] = []
 
-    audio.events.on('toggle', (status:{old: boolean, new:boolean}) => {
-      sendNewStatus(status.new, 'event che')
-    })
+  type IMenuItem = {
+    label: string,
+    type: 'radio',
+    checked: boolean,
+    click: (menuItem:MenuItem) => void
+  }
+  
 
-ipcMain.on('pageLoaded', () => {
-  sendNewStatus(audio.isMuted(), 'pageloaded')
+  const handleClick = (menuItem:MenuItem) => {
+    win?.webContents.send('changeMicrophone', menuItem.label)
+    store.set('lastMicrophone', menuItem.label)
+  }
+
+  for(let element of value){
+    contextMenuElements.push({label: element.name, type: 'radio', checked: false, click: handleClick})
+  }
+
+  let lastMicrophone = store.get('lastMicrophone')
+  let selectedMicrophone = contextMenuElements.find(e => e.label === lastMicrophone)!
+  let indexSelectMicrophone = contextMenuElements.indexOf(selectedMicrophone)
+  contextMenuElements[indexSelectMicrophone].checked = true
+
+  const contextMenu = Menu.buildFromTemplate(contextMenuElements)
+  let tray = new Tray(join(process.env.VITE_PUBLIC, 'favicon.ico'))
+
+  tray.setToolTip('mute-micro.')
+  tray.setContextMenu(contextMenu)
 })

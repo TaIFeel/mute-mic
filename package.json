@@ -1,6 +1,6 @@
 {
   "name": "mute-mic",
-  "version": "1.0.0",
+  "version": "1.2.1",
   "main": "dist-electron/main/index.js",
   "description": "Mute Microphone",
   "author": "Artem Vaganov",
@@ -15,20 +15,19 @@
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "pree2e": "vite build --mode=test",
-    "e2e": "playwright test"
+    "pree2e": "vite build --mode=test"
   },
   "dependencies": {
-    "@mdi/js": "^7.3.67",
-    "@mdi/react": "^1.6.1",
-    "electron-updater": "^6.1.1",
-    "win-audio": "^2.0.2"
+    "electron-store": "^8.1.0",
+    "regedit": "^5.1.2"
   },
   "devDependencies": {
+    "@mdi/js": "^7.3.67",
+    "@mdi/react": "^1.6.1",
     "@types/react": "^18.2.20",
     "@types/react-dom": "^18.2.7",
     "@vitejs/plugin-react": "^4.0.4",
-    "electron": "^26.0.0",
+    "electron": "^22.3.27",
     "electron-builder": "^24.6.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
